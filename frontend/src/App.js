@@ -5,154 +5,99 @@ function App() {
   const [posts, setPosts] = useState([]);
   const [titulo, setTitulo] = useState('');
   const [conteudo, setConteudo] = useState('');
-  const [editandoId, setEditandoId] = useState(null);
-  const [tituloEditado, setTituloEditado] = useState('');
-  const [conteudoEditado, setConteudoEditado] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [mensagem, setMensagem] = useState('');
+  const [logado, setLogado] = useState(false);
 
-  // Buscar posts
   useEffect(() => {
-    axios.get('http://localhost:3001/posts')
-      .then((response) => {
-        setPosts(response.data);
-      })
-      .catch((error) => {
-        console.error('Erro ao buscar os posts:', error);
-      });
+    // Checar se o usuário está logado
+    const userId = localStorage.getItem('userId');
+
+    if (userId) {
+      setLogado(true); // Usuário está logado
+      // Carregar posts
+      axios.get('http://localhost:3001/posts')
+        .then(response => setPosts(response.data))
+        .catch(error => console.error('Erro ao buscar posts', error));
+    }
   }, []);
 
-  // Criar novo post
-  const handleCriarPost = (e) => {
+  const handleLogin = (e) => {
     e.preventDefault();
 
-    axios.post('http://localhost:3001/posts', { titulo, conteudo })
-      .then((response) => {
-        setPosts([...posts, response.data]);  // Adiciona o post criado à lista
-        setTitulo(''); // Limpa o campo título
-        setConteudo(''); // Limpa o campo conteúdo
+    axios.post('http://localhost:3001/login', { email, senha })
+      .then(response => {
+        setMensagem(response.data.message);
+        localStorage.setItem('userId', response.data.userId); // Armazenando userId no LocalStorage
+        setLogado(true);
       })
-      .catch((error) => {
-        console.error('Erro ao criar o post:', error);
+      .catch(err => {
+        setMensagem(err.response.data.message);
       });
   };
 
-  const  handleLogin = (e) => {
+  const handleCriarPost = (e) => {
     e.preventDefault();
-    
-    axios.post('http://localhost:3001/login', { email, senha })
-      .then((response) => {
-        setMensagem(response.data.message);
-      })
-      .catch((err) => {
-        setMensagem(err.response.data.message);
-      })
-  }
 
-  const salvarEdicao = (id) => {
-    axios.put(`http://localhost:3001/posts/${id}`, {
-      titulo: tituloEditado,
-      conteudo: conteudoEditado
-    }).then(response => {
-      setPosts(posts.map(p => p.id === id ? response.data : p))
-      setEditandoId(null);
-    }).catch(err => {
-      console.error('Erro ao editar post', err);
-    });
-  }
+    const userId = localStorage.getItem('userId');
+    console.log('UserID no frontend:', userId); // <-- Aqui!
+    if (!userId) {
+      setMensagem('Você precisa estar logado para criar um post');
+      return;
+    }
 
-  const deletePost = (id) => {
-    axios.delete(`http://localhost:3001/posts/${id}`)
-      .then(() => {
-        setPosts(posts.filter(p => p.id !== id));
+    axios.post('http://localhost:3001/posts', { titulo, conteudo }, { headers: { userId } })
+      .then(response => {
+        setPosts([...posts, response.data]);
+        setTitulo('');
+        setConteudo('');
       })
-      .catch((err) => {
-        console.error("Erro ao deletar:", err);
-      })
-  }
+      .catch(err => console.error('Erro ao criar o post bla bla:', err));
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('userId'); // Remover o userId do LocalStorage
+    setLogado(false); // Atualizar o estado
+    setPosts([]); // Opcional: Limpar posts ao fazer logout
+  };
 
   return (
     <div>
       <h1>Blog</h1>
 
+      {!logado ? (
+        <div>
+          <h2>Login</h2>
+          <form onSubmit={handleLogin}>
+            <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="password" placeholder="Senha" value={senha} onChange={(e) => setSenha(e.target.value)} />
+            <button type="submit">Entrar</button>
+          </form>
+          {mensagem && <p>{mensagem}</p>}
+        </div>
+      ) : (
+        <div>
+          <button onClick={handleLogout}>Sair</button>
+          <form onSubmit={handleCriarPost}>
+            <input type="text" value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título" />
+            <textarea value={conteudo} onChange={(e) => setConteudo(e.target.value)} placeholder="Conteúdo"></textarea>
+            <button type="submit">Criar Post</button>
+          </form>
 
-      <div>
-        <h2>Login</h2>
-        <form onSubmit={handleLogin}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="Senha"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-          />
-          <button type="submit">Entrar</button>
-        </form>
-        {mensagem && <p>{mensagem}</p>}
-      </div>
-
-      {/* Formulário para criar um novo post */}
-      <form onSubmit={handleCriarPost}>
-        <input
-          type="text"
-          placeholder="Título"
-          value={titulo}
-          onChange={(e) => setTitulo(e.target.value)}
-          required
-        />
-        <textarea
-          placeholder="Conteúdo"
-          value={conteudo}
-          onChange={(e) => setConteudo(e.target.value)}
-          required
-        />
-        <button type="submit">Criar Post</button>
-      </form>
-
-      {/* Listar posts */}<ul>
-        {posts.length === 0 ? (
-          <p>Nenhum post encontrado.</p>
-        ) : (
-          posts.map((post) => (
-            <li key={post.id}>
-              {editandoId === post.id ? (
-                <>
-                  <input
-                    value={tituloEditado}
-                    onChange={(e) => setTituloEditado(e.target.value)}
-                  />
-                  <textarea
-                    value={conteudoEditado}
-                    onChange={(e) => setConteudoEditado(e.target.value)}
-                  />
-                  <button onClick={() => salvarEdicao(post.id)}>Salvar</button>
-                  <button onClick={() => setEditandoId(null)}>Cancelar</button>
-                </>
-              ) : (
-                <>
-                  <h2>{post.titulo}</h2>
-                  <p>{post.conteudo}</p>
-                  <button onClick={() => {
-                    setEditandoId(post.id);
-                    setTituloEditado(post.titulo);
-                    setConteudoEditado(post.conteudo);
-                  }}>Editar</button>
-                  <button onClick={() => deletePost(post.id)}>Excluir</button>
-                </>
-              )}
-            </li>
-          ))
-        )}
-      </ul>
-
-
+          <ul>
+            {posts.map(post => (
+              <li key={post.id}>
+                <h3>{post.titulo}</h3>
+                <p>{post.conteudo}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
+
+    
   );
 }
 
